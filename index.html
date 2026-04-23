@@ -26,26 +26,26 @@
 
 .sync-bar{display:flex;align-items:center;gap:7px;font-size:11px;font-family:‘Space Mono’,monospace}
 .sync-dot{width:8px;height:8px;border-radius:50%;background:var(–muted);flex-shrink:0;transition:background 0.3s}
-.sync-dot.syncing{background:var(–c2);animation:pulse 1s infinite}
+.sync-dot.syncing{background:var(–c2);animation:blink 1s infinite}
 .sync-dot.synced{background:var(–c3)}
 .sync-dot.error{background:var(–c5)}
 .sync-text{color:var(–muted)}
-@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.3}}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0.3}}
+
+.sync-btn{background:transparent;border:1px solid var(–border);border-radius:8px;padding:5px 12px;font-size:11px;color:var(–muted);font-family:‘Space Mono’,monospace;cursor:pointer;transition:all .2s}
+.sync-btn:hover{border-color:var(–c3);color:var(–c3)}
 
 .target-highlight{background:linear-gradient(135deg,#1a1200,#2a1f00);border:1.5px solid var(–c2);border-radius:14px;padding:16px 22px;margin-bottom:18px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
 .target-highlight-left label{font-size:10px;color:var(–c2);text-transform:uppercase;letter-spacing:1.5px;font-family:‘Space Mono’,monospace;display:block;margin-bottom:6px}
-.target-highlight-left input{background:transparent;border:none;border-bottom:1.5px solid var(–c2);color:var(–c2);font-family:‘Space Mono’,monospace;font-size:28px;font-weight:700;outline:none;width:220px;padding-bottom:2px}
-.target-highlight-left input::placeholder{color:#5a4400}
+.target-highlight-left input{background:transparent;border:none;border-bottom:1.5px solid var(–c2);color:var(–c2) !important;-webkit-text-fill-color:var(–c2) !important;font-family:‘Space Mono’,monospace;font-size:28px;font-weight:700;outline:none;width:220px;padding-bottom:2px}
+.target-highlight-left input::placeholder{color:#5a4400 !important;-webkit-text-fill-color:#5a4400 !important}
 .target-highlight-right .th-label{font-size:10px;color:var(–muted);font-family:‘Space Mono’,monospace;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px}
 
-/* FIX: all inputs must show light text */
-input, input[type=“number”], input[type=“date”]{color:var(–text) !important;-webkit-text-fill-color:var(–text) !important}
+/* All inputs light text */
+input{color:var(–text) !important;-webkit-text-fill-color:var(–text) !important}
 input::placeholder{color:var(–muted) !important;-webkit-text-fill-color:var(–muted) !important}
-/* Exception: target input stays yellow */
-#inp-target, #inp-enddate{color:var(–c2) !important;-webkit-text-fill-color:var(–c2) !important}
-#inp-target::placeholder{color:#5a4400 !important;-webkit-text-fill-color:#5a4400 !important}
-/* Table row inputs */
-td input{color:var(–text) !important;-webkit-text-fill-color:var(–text) !important;background:transparent}
+#inp-target{color:var(–c2) !important;-webkit-text-fill-color:var(–c2) !important}
+#inp-enddate{color:var(–c2) !important;-webkit-text-fill-color:var(–c2) !important}
 
 .cards-row{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-bottom:18px}
 .card{background:var(–card);border:1px solid var(–border);border-radius:14px;padding:14px 16px;position:relative;overflow:hidden}
@@ -94,7 +94,7 @@ tr:hover td{background:var(–card2)}
 .badge.fail{background:rgba(247,37,133,0.15);color:#F72585}
 .profit-pos{color:#06FFA5;font-weight:700}
 .profit-neg{color:#F72585;font-weight:700}
-td input{background:transparent;border:none;font-family:‘Space Mono’,monospace;font-size:12px;outline:none;padding:0;width:70px}
+td input{background:transparent;border:none;font-family:‘Space Mono’,monospace;font-size:12px;outline:none;padding:0}
 td input:focus{border-bottom:1px solid var(–c1)}
 .del-btn{background:none;border:none;color:#3a2a2a;cursor:pointer;font-size:14px;padding:2px 6px;border-radius:4px;transition:color .15s}
 .del-btn:hover{color:#F72585}
@@ -135,6 +135,7 @@ td input:focus{border-bottom:1px solid var(–c1)}
         <div class="sync-dot" id="sync-dot"></div>
         <span class="sync-text" id="sync-text">Loading...</span>
       </div>
+      <button class="sync-btn" onclick="loadFromSheets()">↻ Sync</button>
       <div class="month-badge" id="days-badge">— DAYS LEFT</div>
     </div>
   </div>
@@ -239,7 +240,7 @@ td input:focus{border-bottom:1px solid var(–c1)}
 </div>
 
 <script>
-const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyskW7azqRN_B045oZ98ejgwgziyLQHZX3-wLXfkWbaDRBesBu09iXsc839acXVates/exec";
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx5MIIGkf-1zZDx1Bx0PpxFG4w9Qhx1hTUrgBC0Y6fg-lJFxCJdh0WXY50sOLlXUNBu/exec';
 
 const fmt     = v => '₹' + Math.round(v).toLocaleString('en-IN');
 const fmtOdds = v => (Math.round(v * 1000) / 1000).toFixed(3);
@@ -247,45 +248,19 @@ const pad     = n => String(n).padStart(2,'0');
 
 let rows      = [];
 let saveTimer = null;
-let isSaving  = false;
 
-// ── JSONP call — bypasses CORS completely ─────────────────────────────
-function jsonpCall(params) {
-  return new Promise((resolve, reject) => {
-    const cbName = 'cb_' + Date.now();
-    const script = document.createElement('script');
-    const timeout = setTimeout(() => {
-      delete window[cbName];
-      script.remove();
-      reject(new Error('timeout'));
-    }, 10000);
-
-    window[cbName] = (data) => {
-      clearTimeout(timeout);
-      delete window[cbName];
-      script.remove();
-      resolve(data);
-    };
-
-    const qs = Object.entries({...params, callback: cbName})
-      .map(([k,v]) => k + '=' + encodeURIComponent(v)).join('&');
-    script.src = SCRIPT_URL + '?' + qs;
-    script.onerror = () => { clearTimeout(timeout); reject(new Error('script error')); };
-    document.head.appendChild(script);
-  });
-}
-
-// ── Sync UI ───────────────────────────────────────────────────────────
 function setSyncStatus(state, text) {
   document.getElementById('sync-dot').className = 'sync-dot ' + state;
   document.getElementById('sync-text').textContent = text;
 }
 
-// ── Load ──────────────────────────────────────────────────────────────
+// ── LOAD — simple GET, same as working tracker ────────────────────────
 async function loadFromSheets() {
+  document.getElementById('loading-overlay').classList.remove('hidden');
+  setSyncStatus('syncing', 'Loading...');
   try {
-    setSyncStatus('syncing', 'Loading...');
-    const json = await jsonpCall({ action: 'load' });
+    const res  = await fetch(SCRIPT_URL + '?action=load');
+    const json = await res.json();
 
     if (json.status === 'ok' && json.data) {
       const d = JSON.parse(json.data);
@@ -300,41 +275,41 @@ async function loadFromSheets() {
     } else {
       rows = defaultRows();
       setDefaultEndDate();
-      setSyncStatus('synced', 'Ready');
+      setSyncStatus('synced', 'Ready — no data yet');
     }
   } catch(e) {
     rows = defaultRows();
     setDefaultEndDate();
-    setSyncStatus('error', 'Sheets offline');
+    setSyncStatus('error', 'Could not reach Sheets');
   }
   document.getElementById('loading-overlay').classList.add('hidden');
   recalc();
 }
 
-// ── Save ──────────────────────────────────────────────────────────────
+// ── SAVE — POST no-cors, same as working tracker ──────────────────────
 async function saveToSheets() {
-  if (isSaving) return;
-  isSaving = true;
   setSyncStatus('syncing', 'Saving...');
   try {
-    const data = JSON.stringify({
+    const payload = {
       target:  document.getElementById('inp-target').value,
       enddate: document.getElementById('inp-enddate').value,
       then:    document.getElementById('inp-then').value,
       now:     document.getElementById('inp-now').value,
       rows
+    };
+    await fetch(SCRIPT_URL, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
     });
-    const json = await jsonpCall({ action: 'save', data });
-    if (json.status === 'ok') {
-      document.getElementById('last-saved-text').textContent = 'Last saved: ' + new Date().toLocaleString('en-IN');
-      setSyncStatus('synced', 'Saved ✓');
-    } else {
-      setSyncStatus('error', 'Save failed');
-    }
+    // no-cors means we can't read the response — assume success
+    const t = new Date().toLocaleString('en-IN');
+    document.getElementById('last-saved-text').textContent = 'Last saved: ' + t;
+    setSyncStatus('synced', 'Saved ✓');
   } catch(e) {
-    setSyncStatus('error', 'Sheets offline');
+    setSyncStatus('error', 'Save failed');
   }
-  isSaving = false;
 }
 
 function debouncedSave() {
@@ -504,8 +479,6 @@ function addRow(){
 
 // ── Init ──────────────────────────────────────────────────────────────
 document.getElementById('today-date').textContent = new Date().toLocaleString('en-IN',{month:'short',year:'numeric'}).toUpperCase();
-
-// Apps Script also needs to support JSONP — update it too!
 loadFromSheets();
 </script>
 
