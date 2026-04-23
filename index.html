@@ -157,7 +157,7 @@ td input:focus{border-bottom:1px solid var(–c1)}
   <div class="header">
     <div class="header-left">
       <h1>Trading <span>Journal</span></h1>
-      <p id="today-date">APR 2026</p><p style="font-size:10px;color:#444466;font-family:monospace;margin-top:2px">v7</p>
+      <p id="today-date">APR 2026</p><p style="font-size:10px;color:#444466;font-family:monospace;margin-top:2px">v9</p>
     </div>
     <div class="header-right">
       <div class="sync-bar">
@@ -269,7 +269,7 @@ td input:focus{border-bottom:1px solid var(–c1)}
 </div>
 
 <script>
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxlLPS2KYeCIGqIsrmtrcRYuyBlTTgiIAcGOA4HumUG5D_lnrhkFb11ekulGXxCtF-2/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbw-4tegnI0OWqTm4poLAF4wQ5BhD41kR0AlsnMsFzYY4MD3nUq4apvRM-EQyLnFUvo/exec';
 
 const fmt     = v => '₹' + Math.round(v).toLocaleString('en-IN');
 const fmtOdds = v => (Math.round(v * 1000) / 1000).toFixed(3);
@@ -283,59 +283,89 @@ function setSyncStatus(state, text) {
   document.getElementById('sync-text').textContent = text;
 }
 
-// ── LOAD — simple GET ─────────────────────────────────────────────────
-async function loadFromSheets() {
+// ── LOAD — GET via script tag (bypasses CORS completely) ─────────────
+function loadFromSheets() {
   document.getElementById('loading-overlay').classList.remove('hidden');
   setSyncStatus('syncing', 'Loading...');
-  try {
-    const res  = await fetch(SCRIPT_URL + '?action=load');
-    const json = await res.json();
-    if (json.status === 'ok' && json.data) {
-      const d = JSON.parse(json.data);
-      document.getElementById('inp-target').value  = d.target  || '';
-      document.getElementById('inp-enddate').value = d.enddate || '';
-      document.getElementById('inp-then').value    = d.then    || '';
-      document.getElementById('inp-now').value     = d.now     || '';
-      rows = d.rows && d.rows.length ? d.rows : defaultRows();
-      const t = json.saved_at ? new Date(json.saved_at).toLocaleString('en-IN') : '—';
-      document.getElementById('last-saved-text').textContent = 'Last saved: ' + t;
-      setSyncStatus('synced', 'Synced ✓');
-    } else {
-      rows = defaultRows();
-      setDefaultEndDate();
-      setSyncStatus('synced', 'Ready');
-    }
-  } catch(e) {
+
+  const cbName = 'tjCallback_' + Date.now();
+  const script = document.createElement('script');
+  const timer  = setTimeout(() => {
+    cleanup();
     rows = defaultRows();
     setDefaultEndDate();
     setSyncStatus('error', 'Could not reach Sheets');
+    document.getElementById('loading-overlay').classList.add('hidden');
+    recalc();
+  }, 10000);
+
+  function cleanup() {
+    clearTimeout(timer);
+    delete window[cbName];
+    if(script.parentNode) script.parentNode.removeChild(script);
   }
-  document.getElementById('loading-overlay').classList.add('hidden');
-  recalc();
+
+  window[cbName] = function(json) {
+    cleanup();
+    try {
+      if (json.status === 'ok' && json.data) {
+        const d = JSON.parse(json.data);
+        document.getElementById('inp-target').value  = d.target  || '';
+        document.getElementById('inp-enddate').value = d.enddate || '';
+        document.getElementById('inp-then').value    = d.then    || '';
+        document.getElementById('inp-now').value     = d.now     || '';
+        rows = d.rows && d.rows.length ? d.rows : defaultRows();
+        const t = json.saved_at ? new Date(json.saved_at).toLocaleString('en-IN') : '—';
+        document.getElementById('last-saved-text').textContent = 'Last saved: ' + t;
+        setSyncStatus('synced', 'Synced ✓');
+      } else {
+        rows = defaultRows();
+        setDefaultEndDate();
+        setSyncStatus('synced', 'Ready');
+      }
+    } catch(e) {
+      rows = defaultRows();
+      setDefaultEndDate();
+      setSyncStatus('error', 'Load error');
+    }
+    document.getElementById('loading-overlay').classList.add('hidden');
+    recalc();
+  };
+
+  script.src = SCRIPT_URL + '?action=load&callback=' + cbName;
+  script.onerror = () => {
+    cleanup();
+    rows = defaultRows();
+    setDefaultEndDate();
+    setSyncStatus('error', 'Could not reach Sheets');
+    document.getElementById('loading-overlay').classList.add('hidden');
+    recalc();
+  };
+  document.head.appendChild(script);
 }
 
-// ── SAVE — GET with data as URL param (no CORS issues) ────────────────
+// ── SAVE — no-cors POST (same as working P&L tracker) ────────────────
 async function saveToSheets() {
   setSyncStatus('syncing', 'Saving...');
   try {
-    const payload = JSON.stringify({
+    const payload = {
       target:  document.getElementById('inp-target').value,
       enddate: document.getElementById('inp-enddate').value,
       then:    document.getElementById('inp-then').value,
       now:     document.getElementById('inp-now').value,
       rows
+    };
+    await fetch(SCRIPT_URL, {
+      method:  'POST',
+      mode:    'no-cors',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify(payload)
     });
-    const url  = SCRIPT_URL + '?action=save&data=' + encodeURIComponent(payload);
-    const res  = await fetch(url);
-    const json = await res.json();
-    if (json.status === 'ok') {
-      document.getElementById('last-saved-text').textContent = 'Last saved: ' + new Date().toLocaleString('en-IN');
-      setSyncStatus('synced', 'Saved ✓');
-    } else {
-      setSyncStatus('error', 'Save failed');
-    }
+    // no-cors = can't read response, assume success
+    document.getElementById('last-saved-text').textContent = 'Last saved: ' + new Date().toLocaleString('en-IN');
+    setSyncStatus('synced', 'Saved ✓');
   } catch(e) {
-    setSyncStatus('error', 'Could not reach Sheets');
+    setSyncStatus('error', 'Save failed');
   }
 }
 
