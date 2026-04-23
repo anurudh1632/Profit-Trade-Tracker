@@ -41,10 +41,40 @@
 .target-highlight-left input::placeholder{color:#5a4400 !important;-webkit-text-fill-color:#5a4400 !important}
 .target-highlight-right .th-label{font-size:10px;color:var(–muted);font-family:‘Space Mono’,monospace;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px}
 
-input{color:var(–text) !important;-webkit-text-fill-color:var(–text) !important}
-input::placeholder{color:var(–muted) !important;-webkit-text-fill-color:var(–muted) !important}
-#inp-target{color:var(–c2) !important;-webkit-text-fill-color:var(–c2) !important}
-#inp-enddate{color:var(–c2) !important;-webkit-text-fill-color:var(–c2) !important}
+/* Force light text on ALL inputs — fixes mobile Safari/Chrome black text bug */
+input,
+input[type=“number”],
+input[type=“date”],
+input[type=“text”]{
+color:#F0F0FF !important;
+-webkit-text-fill-color:#F0F0FF !important;
+background-color:#1C1C28;
+caret-color:#FF6B35;
+}
+input::placeholder{
+color:#7070A0 !important;
+-webkit-text-fill-color:#7070A0 !important;
+opacity:1;
+}
+/* Yellow for target + date inputs */
+#inp-target,
+#inp-enddate{
+color:#FFD23F !important;
+-webkit-text-fill-color:#FFD23F !important;
+background-color:transparent;
+caret-color:#FFD23F;
+}
+#inp-target::placeholder{
+color:#5a4400 !important;
+-webkit-text-fill-color:#5a4400 !important;
+}
+/* Table row inline inputs */
+td input{
+color:#F0F0FF !important;
+-webkit-text-fill-color:#F0F0FF !important;
+background:transparent;
+caret-color:#FF6B35;
+}
 
 .cards-row{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-bottom:18px}
 .card{background:var(–card);border:1px solid var(–border);border-radius:14px;padding:14px 16px;position:relative;overflow:hidden}
