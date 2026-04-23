@@ -41,7 +41,6 @@
 .target-highlight-left input::placeholder{color:#5a4400 !important;-webkit-text-fill-color:#5a4400 !important}
 .target-highlight-right .th-label{font-size:10px;color:var(–muted);font-family:‘Space Mono’,monospace;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px}
 
-/* All inputs light text */
 input{color:var(–text) !important;-webkit-text-fill-color:var(–text) !important}
 input::placeholder{color:var(–muted) !important;-webkit-text-fill-color:var(–muted) !important}
 #inp-target{color:var(–c2) !important;-webkit-text-fill-color:var(–c2) !important}
@@ -240,7 +239,7 @@ td input:focus{border-bottom:1px solid var(–c1)}
 </div>
 
 <script>
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx5MIIGkf-1zZDx1Bx0PpxFG4w9Qhx1hTUrgBC0Y6fg-lJFxCJdh0WXY50sOLlXUNBu/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxlLPS2KYeCIGqIsrmtrcRYuyBlTTgiIAcGOA4HumUG5D_lnrhkFb11ekulGXxCtF-2/exec';
 
 const fmt     = v => '₹' + Math.round(v).toLocaleString('en-IN');
 const fmtOdds = v => (Math.round(v * 1000) / 1000).toFixed(3);
@@ -254,14 +253,13 @@ function setSyncStatus(state, text) {
   document.getElementById('sync-text').textContent = text;
 }
 
-// ── LOAD — simple GET, same as working tracker ────────────────────────
+// ── LOAD — simple GET ─────────────────────────────────────────────────
 async function loadFromSheets() {
   document.getElementById('loading-overlay').classList.remove('hidden');
   setSyncStatus('syncing', 'Loading...');
   try {
     const res  = await fetch(SCRIPT_URL + '?action=load');
     const json = await res.json();
-
     if (json.status === 'ok' && json.data) {
       const d = JSON.parse(json.data);
       document.getElementById('inp-target').value  = d.target  || '';
@@ -275,7 +273,7 @@ async function loadFromSheets() {
     } else {
       rows = defaultRows();
       setDefaultEndDate();
-      setSyncStatus('synced', 'Ready — no data yet');
+      setSyncStatus('synced', 'Ready');
     }
   } catch(e) {
     rows = defaultRows();
@@ -286,29 +284,28 @@ async function loadFromSheets() {
   recalc();
 }
 
-// ── SAVE — POST no-cors, same as working tracker ──────────────────────
+// ── SAVE — GET with data as URL param (no CORS issues) ────────────────
 async function saveToSheets() {
   setSyncStatus('syncing', 'Saving...');
   try {
-    const payload = {
+    const payload = JSON.stringify({
       target:  document.getElementById('inp-target').value,
       enddate: document.getElementById('inp-enddate').value,
       then:    document.getElementById('inp-then').value,
       now:     document.getElementById('inp-now').value,
       rows
-    };
-    await fetch(SCRIPT_URL, {
-      method: 'POST',
-      mode: 'no-cors',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
     });
-    // no-cors means we can't read the response — assume success
-    const t = new Date().toLocaleString('en-IN');
-    document.getElementById('last-saved-text').textContent = 'Last saved: ' + t;
-    setSyncStatus('synced', 'Saved ✓');
+    const url  = SCRIPT_URL + '?action=save&data=' + encodeURIComponent(payload);
+    const res  = await fetch(url);
+    const json = await res.json();
+    if (json.status === 'ok') {
+      document.getElementById('last-saved-text').textContent = 'Last saved: ' + new Date().toLocaleString('en-IN');
+      setSyncStatus('synced', 'Saved ✓');
+    } else {
+      setSyncStatus('error', 'Save failed');
+    }
   } catch(e) {
-    setSyncStatus('error', 'Save failed');
+    setSyncStatus('error', 'Could not reach Sheets');
   }
 }
 
@@ -365,7 +362,6 @@ function clearData(){
   }
 }
 
-// ── Recalc ────────────────────────────────────────────────────────────
 function recalc(){
   const then          = parseFloat(document.getElementById('inp-then').value)||0;
   const nowVal        = parseFloat(document.getElementById('inp-now').value)||0;
@@ -413,7 +409,6 @@ function renderTable(perDay, then){
   const tbody = document.getElementById('log-body');
   tbody.innerHTML = '';
   let runningPL = 0, cumW = 0;
-
   rows.forEach((r, i) => {
     const pl      = calcPL(r.odds, r.investment);
     const hasData = pl !== null;
@@ -422,7 +417,6 @@ function renderTable(perDay, then){
     const acctBal = hasData ? then + runningPL - cumW : null;
     const pass    = hasData && pl >= perDay;
     const wdAmt   = r.withdrawal || 0;
-
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td><button class="del-btn" onclick="deleteRow(${i})" title="Delete">✕</button></td>
@@ -447,7 +441,6 @@ function renderChart(perDay){
   const labels = active.map(r => r.date.split('/').slice(0,2).join('/'));
   const data   = active.map(r => Math.round(calcPL(r.odds, r.investment)));
   const colors = data.map(v => v >= 0 ? '#06FFA5' : '#F72585');
-
   if(chart) chart.destroy();
   chart = new Chart(document.getElementById('plChart'),{
     type:'bar',
@@ -477,7 +470,6 @@ function addRow(){
   debouncedSave();
 }
 
-// ── Init ──────────────────────────────────────────────────────────────
 document.getElementById('today-date').textContent = new Date().toLocaleString('en-IN',{month:'short',year:'numeric'}).toUpperCase();
 loadFromSheets();
 </script>
